@@ -1,6 +1,8 @@
 {
     "name": "dankkomcg/mysql-sync",
     "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
     "authors": [
         {
             "name": "Jose Meira",
@@ -13,9 +15,11 @@
         }
     },
     "require": {
-        "symfony/console": "^5.4"
+        "symfony/console": "^5.4",
+        "php": "^7.4"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.6"
-    }
+    },
+    "minimum-stability": "stable"
 }
