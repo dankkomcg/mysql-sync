@@ -1,100 +1,96 @@
-# MySQL Sync: MySQL Database Synchronization Library
+# MySQL Database Synchronization
 
-Esta librería proporciona una solución para sincronizar datos entre dos bases de datos `MySQL`. 
-Está diseñada para manejar grandes volúmenes de datos, respetar las dependencias entre tablas y resolver inconsistencias durante la sincronización.
+Esta librería es una solución para sincronizar datos entre dos bases de datos `MySQL`. Diseñada con un enfoque en la integridad referencial y el rendimiento, esta herramienta es ideal para escenarios de migración de datos, replicación o mantenimiento de bases de datos espejo.
 
-## Características destacables
+## Características principales
 
-- Sincronización basada en el orden temporal (ASC o DESC) configurable.
-- Resolución automática de dependencias entre tablas.
-- Manejo de inserciones en modo bulk para mejorar el rendimiento.
-- Estrategias de fallback para manejar conflictos de claves únicas y violaciones de claves foráneas.
-- Soporte para sincronización parcial con límite de registros por tabla.
+- Dirección del la sincronización configurable (ASC o DESC)
+- Resolución automática de dependencias entre tablas
+- Manejo de inserciones en modo bulk para optimizar el rendimiento
+- Soporte para transacciones para garantizar la integridad de los datos
+- Sistema de logging flexible y personalizable
+- Manejo inteligente de conflictos de claves únicas y violaciones de claves foráneas
+
+## Instalación
+
+Puedes instalar esta librería vía Composer:
+
+```bash
+composer require dankkomcg/mysql-sync
+```
 
 ## Uso básico
 
 ```php
+use Dankkomcg\MySQL\Sync\SyncManager;
+use Dankkomcg\MySQL\Sync\Mappers\DisplayConsoleLog;
+
+// Configuración de las bases de datos
 $sourceConfig = [
-    'host' => 'source_host',
-    'dbname' => 'source_db',
-    'user' => 'source_user',
-    'password' => 'source_password'
+    'host' => 'localhost',
+    'dbname' => 'source_database',
+    'user' => 'username',
+    'password' => 'password'
 ];
 
 $targetConfig = [
-    'host' => 'target_host',
-    'dbname' => 'target_db',
-    'user' => 'target_user',
-    'password' => 'target_password'
+    'host' => 'localhost',
+    'dbname' => 'target_database',
+    'user' => 'username',
+    'password' => 'password'
 ];
 
-$syncManager = new SyncManager($sourceConfig, $targetConfig, 1000, null, 'DESC');
-$syncManager->sync();
+// Inicializar el SyncManager
+$syncManager = new SyncManager(
+    $sourceConfig,
+    $targetConfig,
+    1000, // Tamaño del chunk
+    null, // Máximo de registros por tabla (null para sin límite)
+    'DESC' // Dirección de sincronización
+);
+
+// Configurar el logger (opcional)
+SyncManager::setLogger(new DisplayConsoleLog());
+
+// Ejecutar la sincronización
+$syncManager->run();
 ```
 
-## Detalles de implementación
+## Configuración avanzada
 
-El siguiente diagrama de secuencia muestra el flujo de operaciones durante el proceso de sincronización:
+### Personalización del logging
 
-```
-SyncManager         DependencyResolver    TableSync           DatabaseConnection
-    |                       |                  |                       |
-    |   sync()              |                  |                       |
-    |-------------------→   |                  |                       |
-    |   getTablesInDependencyOrder()           |                       |
-    |-------------------→   |                  |                       |
-    |                       |                  |                       |
-    |   ←-------------------┐                  |                       |
-    |   return sortedTables |                  |                       |
-    |                       |                  |                       |
-    |   syncTables(sortedTables)               |                       |
-    |-------------------------------------→    |                       |
-    |                       |                  |   getPdo()            |
-    |                       |                  |-------------------→   |
-    |                       |                  |   ←-------------------┐
-    |                       |                  |   return PDO          |
-    |                       |                  |                       |
-    |                       |                  |   fetchRows()         |
-    |                       |                  |-------------------→   |
-    |                       |                  |   ←-------------------┐
-    |                       |                  |   return rows         |
-    |                       |                  |                       |
-    |                       |                  |   insertRows()        |
-    |                       |                  |-------------------→   |
-    |                       |                  |   ←-------------------┐
-    |                       |                  |   return result       |
-    |                       |                  |                       |
-    |   ←-------------------------------------┐                        |
-    |   return sync result  |                  |                       |
-    |                       |                  |                       |
+Puedes implementar tu propio logger extendiendo la interfaz `LoggerInterface`:
+
+```php
+use Dankkomcg\MySQL\Sync\Mappers\LoggerInterface;
+
+class CustomLogger implements LoggerInterface
+{
+    // Implementa los métodos requeridos
+}
+
+SyncManager::setLogger(new CustomLogger());
 ```
 
-Este diagrama muestra como es el proceso de sincronización:
+### Manejo de dependencias cíclicas
 
-1. SyncManager inicia el proceso llamando a su método sync().
-2. Se utiliza DependencyResolver para obtener el orden de las tablas basado en sus dependencias.
-3. SyncManager llama a TableSync para sincronizar las tablas en el orden determinado.
-4. TableSync interactúa con DatabaseConnection para obtener conexiones PDO y realizar operaciones en las bases de datos.
-5. Para cada tabla, TableSync realiza las operaciones de fetchRows() e insertRows().
-6. Finalmente, SyncManager devuelve el resultado de la sincronización.
-
-## Manejo de errores y logging
-
-La librería implementa un sistema robusto de manejo de errores y logging, permitiendo una fácil identificación y resolución de problemas durante el proceso de sincronización.
+La librería utiliza un `DependencyResolver` para manejar dependencias entre tablas. En caso de dependencias cíclicas, se emitirá una advertencia y se procederá con un orden best-effort.
 
 ## Consideraciones de rendimiento
 
-- Utiliza inserciones en modo bulk para mejorar significativamente el rendimiento.
-- Implementa estrategias de fallback para manejar conflictos sin detener el proceso.
-- Permite la configuración del tamaño de chunk y el número máximo de registros por tabla para optimizar el uso de recursos.
+- El tamaño del chunk puede ajustarse para optimizar el rendimiento según las características de tus datos y recursos del sistema.
+- La sincronización utiliza transacciones para garantizar la consistencia de los datos, lo que puede afectar el rendimiento en bases de datos muy grandes.
 
-## Limitaciones y posibles mejoras
+## Limitaciones conocidas
 
-- Actualmente solo soporta MySQL. Se podría extender para otros SGBD en el futuro.
-- No maneja la sincronización de esquemas de base de datos, solo datos.
-- Podría beneficiarse de un sistema de logging más detallado y configurable.
+- Actualmente, solo soporta bases de datos MySQL.
+- No sincroniza la estructura de las tablas, solo los datos.
 
 ## Contribuciones
 
-Las contribuciones son bienvenidas. Por favor, abre una issue para discutir cambios mayores antes de enviar un pull request.
+Las contribuciones son bienvenidas. Por favor, abre un issue para discutir cambios mayores antes de enviar un pull request.
 
+## Licencia
+
+Este proyecto está licenciado bajo la Licencia MIT.

@@ -29,6 +29,39 @@ class TableSync extends Loggable
 
     public function syncTables($tables, $sourceSchema, $targetSchema)
     {
+        try {
+            $this->targetPdo->beginTransaction();
+
+            foreach ($tables as $table) {
+                self::logger()->info("Copiando datos de la tabla: $table...");
+
+                $columnsInfo = $this->getColumnsInfo($table, $sourceSchema);
+                $primaryKeys = $this->getPrimaryKeys($columnsInfo);
+                $foreignKeys = $this->getForeignKeys($table, $sourceSchema);
+
+                $orderColumn = $this->getOrderColumn($columnsInfo, $primaryKeys);
+
+                $totalRows = $this->getTotalRows($table, $sourceSchema);
+                if ($this->maxRecordsPerTable !== null) {
+                    $totalRows = min($totalRows, $this->maxRecordsPerTable);
+                }
+
+                $this->copyData($table, $columnsInfo, $primaryKeys, $foreignKeys, $orderColumn, $sourceSchema, $targetSchema, $totalRows);
+
+                self::logger()->success("Datos copiados completamente para la tabla: $table.");
+            }
+
+            $this->targetPdo->commit();
+            self::logger()->success("Copia de datos completada exitosamente.");
+        } catch (\Exception $e) {
+            $this->targetPdo->rollBack();
+            self::logger()->error("Error durante la sincronización: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    public function _syncTables($tables, $sourceSchema, $targetSchema)
+    {
         foreach ($tables as $table) {
             
             $this->logger()->info("Copiando datos de la tabla: $table...");
