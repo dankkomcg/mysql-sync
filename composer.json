@@ -1,5 +1,6 @@
 {
     "name": "dankkomcg/mysql-sync",
+    "description": "MySQL Database Synchronization Library",
     "version": "1.0.0",
     "type": "library",
     "license": "MIT",
