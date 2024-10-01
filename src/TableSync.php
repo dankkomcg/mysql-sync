@@ -13,17 +13,16 @@ class TableSync extends Loggable
     private $chunkSize;
     private $maxRecordsPerTable;
     private $extractedIds;
-    private $insertRowBulkMode;
     private $syncDirection;
 
-    public function __construct($sourcePdo, $targetPdo, $chunkSize, $maxRecordsPerTable = null, $syncDirection = 'DESC')
-    {
+    public function __construct(
+        $sourcePdo, $targetPdo, $chunkSize, $maxRecordsPerTable = null, $syncDirection = 'DESC'
+    ) {
         $this->sourcePdo          = $sourcePdo;
         $this->targetPdo          = $targetPdo;
         $this->chunkSize          = $chunkSize;
         $this->maxRecordsPerTable = $maxRecordsPerTable;
         $this->extractedIds       = [];
-        $this->insertRowBulkMode  = true;
         $this->syncDirection = $syncDirection;
     }
 
@@ -58,29 +57,6 @@ class TableSync extends Loggable
             self::logger()->error("Error durante la sincronización: " . $e->getMessage());
             throw $e;
         }
-    }
-
-    public function _syncTables($tables, $sourceSchema, $targetSchema)
-    {
-        foreach ($tables as $table) {
-            
-            $this->logger()->info("Copiando datos de la tabla: $table...");
-
-            $columnsInfo = $this->getColumnsInfo($table, $sourceSchema);
-            $primaryKeys = $this->getPrimaryKeys($columnsInfo);
-            $foreignKeys = $this->getForeignKeys($table, $sourceSchema);
-
-            $orderColumn = $this->getOrderColumn($columnsInfo, $primaryKeys);
-
-            $totalRows = $this->getTotalRows($table, $sourceSchema);
-            if ($this->maxRecordsPerTable !== null) {
-                $totalRows = min($totalRows, $this->maxRecordsPerTable);
-            }
-
-            $this->copyData($table, $columnsInfo, $primaryKeys, $foreignKeys, $orderColumn, $sourceSchema, $targetSchema, $totalRows);
-        }
-
-        $this->logger()->success("Copia de datos completada.");
     }
 
     private function getColumnsInfo($table, $schema)

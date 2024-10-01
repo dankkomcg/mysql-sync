@@ -2,17 +2,14 @@
 
 namespace Dankkomcg\MySQL\Sync\Mappers;
 
-class DisplayConsoleLog implements LoggerInterface
-{
+class DisplayConsoleLog implements LoggerInterface {
     private array $logLevels;
 
-    public function __construct()
-    {
+    public function __construct() {
         $this->initializeDefaultConfig();
     }
 
-    private function initializeDefaultConfig(): void
-    {
+    private function initializeDefaultConfig(): void {
         $this->logLevels = [
             'info' => 'blue',
             'success' => 'green',
@@ -39,18 +36,15 @@ class DisplayConsoleLog implements LoggerInterface
         $this->write($message, 'warning');
     }
 
-    public function error(string $message): void
-    {
+    public function error(string $message): void {
         $this->write($message, 'error');
     }
 
-    public function success(string $message): void
-    {
+    public function success(string $message): void {
         $this->write($message, 'success');
     }
 
-    private function getColorCode(string $color): string
-    {
+    private function getColorCode(string $color): string {
         $colors = [
             'black' => "\033[30m",
             'red' => "\033[31m",
