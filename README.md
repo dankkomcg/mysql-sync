@@ -61,6 +61,18 @@ $syncManager->run($sourceSchema, $targetSchema);
 
 ## Configuración avanzada
 
+### Filtrar tablas
+
+El método `setFilteredTables(array $tables)` permite especificar qué tablas sincronizar, ofreciendo un control más granular sobre el proceso de sincronización.
+Simplemente setear el método e indicar las tablas a sincronizar:
+
+```php
+$syncManager->setFilteredTables(['users', 'clients']);
+```
+
+Debemos tener en cuenta que estas tablas pueden tener dependencias respecto a otras tablas, por lo tanto, 
+deberíamos sincronizar las tablas dependientes.
+
 ### Custom logger
 
 Se puede implementar un custom logger extendiendo la interfaz `Logger`:
