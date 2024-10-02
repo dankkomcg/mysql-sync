@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit;
+namespace Dankkomcg\MySQL\Sync\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Dankkomcg\MySQL\Sync\DependencyResolver;
@@ -8,8 +8,8 @@ use PDO;
 
 class DependencyResolverTest extends TestCase
 {
-    private $pdo;
-    private $resolver;
+    private PDO $pdo;
+    private DependencyResolver $resolver;
 
     protected function setUp(): void
     {
@@ -17,8 +17,7 @@ class DependencyResolverTest extends TestCase
         $this->resolver = new DependencyResolver();
     }
 
-    public function testGetTablesInDependencyOrder()
-    {
+    public function testGetTablesInDependencyOrder() {
         $schema = 'test_schema';
         $tables = ['table1', 'table2', 'table3'];
         $foreignKeys = [
@@ -36,7 +35,11 @@ class DependencyResolverTest extends TestCase
             ->willReturnOnConsecutiveCalls($stmtForeignKeys, $stmtTables);
 
         $result = $this->resolver->getTablesInDependencyOrder($this->pdo, $schema);
+        $this->assertEquals(
+            [
+                'table1', 'table2', 'table3'
+            ], $result
+        );
 
-        $this->assertEquals(['table1', 'table2', 'table3'], $result);
     }
 }

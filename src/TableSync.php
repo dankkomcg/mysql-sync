@@ -2,37 +2,97 @@
 
 namespace Dankkomcg\MySQL\Sync;
 
+use Dankkomcg\MySQL\Sync\Exceptions\TableSyncException;
 use PDO;
 use PDOException;
 
-// Clase que gestiona la sincronización de tablas
-class TableSync extends Loggable
-{
-    private $sourcePdo;
-    private $targetPdo;
-    private $chunkSize;
-    private $maxRecordsPerTable;
-    private $extractedIds;
-    private $syncDirection;
+/**
+ * Class which makes the table synchronization for SQL engines
+ */
+class TableSync {
 
-    public function __construct(
-        $sourcePdo, $targetPdo, $chunkSize, $maxRecordsPerTable = null, $syncDirection = 'DESC'
-    ) {
+    use Loggable;
+
+    private PDO $sourcePdo;
+    private PDO $targetPdo;
+    private int $chunkSize;
+    private int $maxRecordsPerTable;
+    private array $extractedIds;
+    private string $syncDirection;
+
+    private const QUERY_TABLE_COLUMNS_INFORMATION_SCHEMA = "
+        SELECT COLUMN_NAME 
+        FROM 
+            INFORMATION_SCHEMA.COLUMNS 
+        WHERE 
+            TABLE_SCHEMA = :schema AND TABLE_NAME = :table
+            ";
+
+    private const QUERY_FOREIGN_KEYS_INFORMATION_SCHEMA = "
+        SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME 
+        FROM
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE
+            TABLE_SCHEMA = :schema
+            AND TABLE_NAME = :table
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+            ";
+
+    public function __construct(PDO $sourcePdo, PDO $targetPdo) {
         $this->sourcePdo          = $sourcePdo;
         $this->targetPdo          = $targetPdo;
-        $this->chunkSize          = $chunkSize;
-        $this->maxRecordsPerTable = $maxRecordsPerTable;
         $this->extractedIds       = [];
+    }
+
+    public function setChunkSize(int $chunkSize): void {
+        $this->chunkSize = $chunkSize;
+    }
+
+    public function setMaxRecordsPerTable(int $maxRecordsPerTable): void {
+        $this->maxRecordsPerTable = $maxRecordsPerTable;
+    }
+
+    public function setQueryOrder(string $syncDirection): void {
         $this->syncDirection = $syncDirection;
     }
 
-    public function syncTables($tables, $sourceSchema, $targetSchema)
-    {
+    public function syncSchemaTables(array $tables, string $sourceSchema, string $targetSchema) {
+
         try {
+
+            $this->createTransactionStatement($tables, $sourceSchema, $targetSchema);
+            $this->logger()->success("Tables are synchronized");
+
+        } catch (\Exception $e) {
+
+            $this->logger()->error(
+                "Synchronization error: " . $e->getMessage()
+            );
+        }
+    }
+
+    /**
+     * @throws TableSyncException
+     */
+    private function createTransactionStatement(
+        array $tables, string $sourceSchema, string $targetSchema): void
+    {
+
+        if (empty($tables)) {
+            throw new TableSyncException("No tables to synchronize");
+        }
+
+        try {
+
             $this->targetPdo->beginTransaction();
 
             foreach ($tables as $table) {
-                self::logger()->info("Copiando datos de la tabla: $table...");
+
+                $this->logger()->info(
+                    sprintf(
+                        "Copying data from table %s...", $table
+                    )
+                );
 
                 $columnsInfo = $this->getColumnsInfo($table, $sourceSchema);
                 $primaryKeys = $this->getPrimaryKeys($columnsInfo);
@@ -41,53 +101,48 @@ class TableSync extends Loggable
                 $orderColumn = $this->getOrderColumn($columnsInfo, $primaryKeys);
 
                 $totalRows = $this->getTotalRows($table, $sourceSchema);
-                if ($this->maxRecordsPerTable !== null) {
+
+                if (isset($this->maxRecordsPerTable)) {
                     $totalRows = min($totalRows, $this->maxRecordsPerTable);
                 }
 
-                $this->copyData($table, $columnsInfo, $primaryKeys, $foreignKeys, $orderColumn, $sourceSchema, $targetSchema, $totalRows);
+                $this->copyData(
+                    $table, $columnsInfo, $primaryKeys, $foreignKeys, $orderColumn, $sourceSchema, $targetSchema, $totalRows
+                );
 
-                self::logger()->success("Datos copiados completamente para la tabla: $table.");
+                $this->logger()->success("Datos copiados completamente para la tabla: $table.");
             }
 
             $this->targetPdo->commit();
-            self::logger()->success("Copia de datos completada exitosamente.");
+
         } catch (\Exception $e) {
+
             $this->targetPdo->rollBack();
-            self::logger()->error("Error durante la sincronización: " . $e->getMessage());
             throw $e;
+
         }
+
     }
 
-    private function getColumnsInfo($table, $schema)
-    {
+    private function getColumnsInfo($table, $schema) {
         $query = "SHOW COLUMNS FROM `$schema`.`$table`";
         $stmt = $this->sourcePdo->query($query);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    private function getPrimaryKeys($columnsInfo)
+    private function getPrimaryKeys($columnsInfo): array
     {
         return array_column(array_filter($columnsInfo, function($column) {
             return $column['Key'] === 'PRI';
         }), 'Field');
     }
 
-    private function getForeignKeys($table, $schema)
-    {
-        $query = "
-        SELECT
-            COLUMN_NAME,
-            REFERENCED_TABLE_NAME,
-            REFERENCED_COLUMN_NAME
-        FROM
-            INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE
-            TABLE_SCHEMA = :schema
-            AND TABLE_NAME = :table
-            AND REFERENCED_TABLE_NAME IS NOT NULL";
-        
-        $stmt = $this->sourcePdo->prepare($query);
+    private function getForeignKeys($table, $schema) {
+
+        $stmt = $this->sourcePdo->prepare(
+            self::QUERY_FOREIGN_KEYS_INFORMATION_SCHEMA
+        );
+
         $stmt->execute(['schema' => $schema, 'table' => $table]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -143,16 +198,25 @@ class TableSync extends Loggable
             $lastValue = end($rows)[$orderColumn];
             $processedRows += count($rows);
 
-            $this->logger()->info(
-                "Copiado un bloque de " . count($rows) . " registros de la tabla: $table. Último valor procesado: $lastValue."
-            );
+            $this->logger()
+                ->info(
+                    sprintf(
+                        "A block with %s rows was copied from table %s. Last item registered is %s", count($rows), $table, $lastValue
+                    )
+                )
+            ;
 
-            if ($this->maxRecordsPerTable !== null && $processedRows >= $this->maxRecordsPerTable) {
+            // Check if max records
+            if (isset($this->maxRecordsPerTable) && ($processedRows >= $this->maxRecordsPerTable)) {
                 break;
             }
         }
 
-        $this->logger()->success("Datos copiados completamente para la tabla: $table.");
+        $this->logger()->success(
+            sprintf(
+                "Data was successfully copied from table %s", $table
+            )
+        );
     }
 
     private function fetchRows($table, $orderColumn, $schema, $lastValue)
@@ -171,69 +235,15 @@ class TableSync extends Loggable
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
-    /**
-     * 
-     
-     * @param mixed $table
-     * @param mixed $orderColumn
-     * @param mixed $schema
-     * @param mixed $lastValue
-     * @return mixed
-     * @deprecated Se agrega la funcionalidad para ordenar según se indica en la configuración
-     */
-    private function _fetchRows($table, $orderColumn, $schema, $lastValue)
-    {
-        // Obtener solo las columnas necesarias
-        $columns = $this->getTableColumns($schema, $table);
-        $columnList = implode(', ', array_map(function($col) { return "`$col`"; }, $columns));
-    
-        // Preparar la consulta base
-        $query = "SELECT $columnList FROM `$schema`.`$table`";
-        
-        // Añadir condición WHERE y ORDER BY
-        if ($lastValue !== null) {
-            $query .= " WHERE `$orderColumn` > :lastValue";
-        }
-        $query .= " ORDER BY `$orderColumn` ASC LIMIT :limit";
-    
-        // Preparar y ejecutar la consulta
-        $stmt = $this->sourcePdo->prepare($query);
-        
-        if ($lastValue !== null) {
-            $stmt->bindValue(':lastValue', $lastValue, $this->getColumnType($schema, $table, $orderColumn));
-        }
-        $stmt->bindValue(':limit', $this->chunkSize, PDO::PARAM_INT);
-        
-        $stmt->execute();
-    
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
     
     private function getTableColumns($schema, $table) {
-        $query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
-                  WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table";
-        $stmt = $this->targetPdo->prepare($query);
+
+        $stmt = $this->targetPdo->prepare(
+            self::QUERY_TABLE_COLUMNS_INFORMATION_SCHEMA
+        );
+
         $stmt->execute(['schema' => $schema, 'table' => $table]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
-    }
-    
-    private function getColumnType($schema, $table, $column)
-    {
-        $query = "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
-                  WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table AND COLUMN_NAME = :column";
-        $stmt = $this->sourcePdo->prepare($query);
-        $stmt->execute(['schema' => $schema, 'table' => $table, 'column' => $column]);
-        $type = $stmt->fetchColumn();
-    
-        switch (strtolower($type)) {
-            case 'int': case 'bigint': case 'tinyint': case 'smallint': case 'mediumint':
-                return PDO::PARAM_INT;
-            case 'datetime': case 'timestamp': case 'date': case 'time':
-                return PDO::PARAM_STR;
-            default:
-                return PDO::PARAM_STR;
-        }
     }
 
     private function copyRelatedData($referencedTable, $referencedColumn, $rows, $foreignKeyColumn, $sourceSchema, $targetSchema)
@@ -279,7 +289,14 @@ class TableSync extends Loggable
         }
     
         $realColumns = $this->getTableColumns($schema, $table);
-        $this->logger()->info("Columnas reales de la tabla $table: " . implode(", ", $realColumns));
+
+        $this->logger()
+            ->info(
+                sprintf(
+                    "Real columns from the table %s: %s", $table,  implode(", ", $realColumns)
+                )
+            )
+        ;
     
         $columnsList = implode(", ", array_map(function($col) {
             return "`$col`";
@@ -328,36 +345,59 @@ class TableSync extends Loggable
             $stmtInsert = $this->targetPdo->prepare($insertQuery);
             $stmtInsert->execute($insertData);
 
-            $this->logger()->info(sprintf("%s registros procesados en modo bulk para la tabla %s", count($rows), $table));
+            $this->logger()
+                ->info(
+                    sprintf("%s rows processed in bulk mode from table %s", count($rows), $table)
+                )
+            ;
 
         } catch (PDOException $e) {
+
             if ($e->getCode() == '23000') {
+
                 if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
                     // Intentar REPLACE INTO
                     $replaceQuery = "REPLACE INTO `$schema`.`$table` ($columnsList) VALUES $placeholdersString";
                     try {
                         $stmtReplace = $this->targetPdo->prepare($replaceQuery);
                         $stmtReplace->execute($insertData);
+
                         $this->logger()->info(
-                            sprintf("%s registros procesados en modo REPLACE para la tabla %s", count($rows), $table)
+                            sprintf("%s rows processed in REPLACE mode from table %s", count($rows), $table)
                         );
+
                     } catch (PDOException $e2) {
-                        $this->handleForeignKeyViolation($table, $schema, $columnsList, $rows, $realColumns);
+                        $this->handleForeignKeyError($table, $schema, $columnsList, $rows, $realColumns);
                     }
+
                 } else {
-                    // Manejar violación de clave foránea
-                    $this->handleForeignKeyViolation($table, $schema, $columnsList, $rows, $realColumns);
+
+                    // Try to fix the foreign key
+                    $this->handleForeignKeyError($table, $schema, $columnsList, $rows, $realColumns);
                 }
+
             } else {
-                $this->logger()->error("Error al insertar en la tabla $table: " . $e->getMessage());
-                $this->logger()->error("Query: " . $insertQuery);
+
+                $this->logger()->error(
+                    sprintf(
+                        "Error while insert in %s: %s", $table, $e->getMessage()
+                    )
+                );
+
+                $this->logger()->error(sprintf("Query: %s",$insertQuery));
             }
+
         }
     }
     
-    private function handleForeignKeyViolation($table, $schema, $columnsList, $rows, $realColumns)
+    private function handleForeignKeyError($table, $schema, $columnsList, $rows, $realColumns)
     {
-        $this->logger()->warning("Manejando violación de clave foránea para la tabla $table");
+        $this->logger()
+            ->warning(
+                sprintf(
+                    "Reviewing the foreign key error from table %s", $table
+                )
+            );
         
         // Insertar registros uno por uno
         $insertQuery = "INSERT INTO `$schema`.`$table` ($columnsList) VALUES (" . implode(',', array_fill(0, count($realColumns), '?')) . ")
@@ -384,85 +424,11 @@ class TableSync extends Loggable
             }
         }
         
-        $this->logger()->success(
-            sprintf("%s registros insertados exitosamente, %s registros fallaron para la tabla %s", $successCount, $errorCount, $table)
-        );
-    }
-
-    /**
-     * Summary of _insertRows
-     * @param mixed $table
-     * @param mixed $columnsInfo
-     * @param mixed $primaryKeys
-     * @param mixed $rows
-     * @param mixed $schema
-     * @return void
-     * @deprecated Cambia la query para evitar actualización de registros en origen que provoquen huérfanos
-     */
-    private function _insertRows($table, $columnsInfo, $primaryKeys, $rows, $schema)
-    {
-        if (empty($rows)) {
-            return;
-        }
-    
-        // Obtener las columnas reales de la tabla
-        $realColumns = $this->getTableColumns($schema, $table);
-    
-        $columnsList = implode(", ", array_map(function($col) {
-            return "`$col`";
-        }, $realColumns));
-    
-        $placeholders = [];
-        $insertData = [];
-        foreach ($rows as $row) {
-            $rowPlaceholders = [];
-            $rowData = [];
-            foreach ($realColumns as $column) {
-                if (array_key_exists($column, $row)) {
-                    $value = $row[$column];
-                    if ($value === '' && isset($columnsInfo[$column]) && strpos($columnsInfo[$column], 'int') !== false) {
-                        $rowData[] = null;
-                    } elseif (is_string($value)) {
-                        $rowData[] = mb_convert_encoding($value, 'UTF-8', 'auto');
-                    } else {
-                        $rowData[] = $value;
-                    }
-                } else {
-                    $rowData[] = null; // Si la columna no existe en los datos, insertamos NULL
-                }
-                $rowPlaceholders[] = '?';
-            }
-            $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
-            $insertData = array_merge($insertData, $rowData);
-        }
-    
-        $placeholdersString = implode(', ', $placeholders);
-    
-        $updateList = [];
-        foreach ($realColumns as $column) {
-            if (!in_array($column, $primaryKeys)) {
-                $updateList[] = "`$column` = VALUES(`$column`)";
-            }
-        }
-    
-        $updateClause = implode(", ", $updateList);
-    
-        $insertQuery = "INSERT INTO `$schema`.`$table` ($columnsList) VALUES $placeholdersString 
-            ON DUPLICATE KEY UPDATE $updateClause";
-    
-        try {
-            $stmtInsert = $this->targetPdo->prepare($insertQuery);
-            $stmtInsert->execute($insertData);
-            
-            $this->logger()->info(
-                sprintf("%s registros procesados en modo bulk para la tabla %s", count($rows), $table)
-            );
-        } catch (PDOException $e) {
-            $this->logger()->error("Error al insertar en la tabla $table: " . $e->getMessage());
-            $this->logger()->error("Query: " . $insertQuery);
-            // Aquí puedes decidir si quieres continuar o detener el proceso
-            // throw $e; // Para detener el proceso
-        }
+        $this->logger()
+            ->success(
+                sprintf("%s rows created successfully, %s rows fail from table %s", $successCount, $errorCount, $table)
+            )
+        ;
     }
 
 }

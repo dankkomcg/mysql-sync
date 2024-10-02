@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Unit;
+namespace Dankkomcg\MySQL\Sync\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Dankkomcg\MySQL\Sync\TableSync;
@@ -65,7 +65,7 @@ class TableSyncTest extends TestCase
         $this->targetPdo->expects($this->once())->method('commit');
 
         // Execute syncTables
-        $this->tableSync->syncTables($tables, $sourceSchema, $targetSchema);
+        $this->tableSync->syncSchemaTables($tables, $sourceSchema, $targetSchema);
 
         // Assert that the process completed without exceptions
         $this->assertTrue(true);
@@ -78,7 +78,9 @@ class TableSyncTest extends TestCase
         $targetSchema = 'target_schema';
 
         // Mock methods to throw an exception
-        $this->sourcePdo->method('query')->willThrowException(new \Exception('Test exception'));
+        $this->sourcePdo->method('query')->willThrowException(
+            new \Exception('Test exception')
+        );
 
         // Mock transaction methods
         $this->targetPdo->expects($this->once())->method('beginTransaction');
@@ -88,6 +90,6 @@ class TableSyncTest extends TestCase
         $this->expectExceptionMessage('Test exception');
 
         // Execute syncTables
-        $this->tableSync->syncTables($tables, $sourceSchema, $targetSchema);
+        $this->tableSync->syncSchemaTables($tables, $sourceSchema, $targetSchema);
     }
 }

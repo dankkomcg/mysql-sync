@@ -1,6 +1,8 @@
 # MySQL Database Synchronization
 
-Esta librería es una solución para sincronizar datos entre dos bases de datos `MySQL`. Diseñada con un enfoque en la integridad referencial y el rendimiento, esta herramienta es ideal para escenarios de migración de datos, replicación o mantenimiento de bases de datos espejo.
+Esta librería es una solución para sincronizar datos entre dos bases de datos `MySQL`. 
+Diseñada con un enfoque en la integridad referencial, esta librería 
+permite escenarios de migración de datos, replicación o mantenimiento de bases de datos en forma de espejo.
 
 ## Características principales
 
@@ -9,7 +11,8 @@ Esta librería es una solución para sincronizar datos entre dos bases de datos 
 - Manejo de inserciones en modo bulk para optimizar el rendimiento
 - Soporte para transacciones para garantizar la integridad de los datos
 - Sistema de logging flexible y personalizable
-- Manejo inteligente de conflictos de claves únicas y violaciones de claves foráneas
+- Manejo conflictos de claves únicas y violaciones de claves foráneas
+- Seleccionar tablas para la sincronización
 
 ## Instalación
 
@@ -22,8 +25,8 @@ composer require dankkomcg/mysql-sync
 ## Uso básico
 
 ```php
+use Dankkomcg\MySQL\Sync\Loggers\ConsoleLogger;
 use Dankkomcg\MySQL\Sync\SyncManager;
-use Dankkomcg\MySQL\Sync\Mappers\DisplayConsoleLog;
 
 // Configuración de las bases de datos
 $sourceConfig = [
@@ -40,42 +43,59 @@ $targetConfig = [
     'password' => 'password'
 ];
 
-// Inicializar el SyncManager
-$syncManager = new SyncManager(
-    $sourceConfig,
-    $targetConfig,
-    1000, // Tamaño del chunk
-    null, // Máximo de registros por tabla (null para sin límite)
-    'DESC' // Dirección de sincronización
-);
+$sourceConnection = new DatabaseConnection($sourceHost, $sourceUsername, $sourcePassword, $sourceSchema);
+$targetConnection = new DatabaseConnection($targetHost, $targetUsername, $targetPassword, $targetSchema);
 
-// Configurar el logger (opcional)
-SyncManager::setLogger(new DisplayConsoleLog());
+$syncManager      = new SyncManager($sourceConnection, $targetConnection);
 
-// Ejecutar la sincronización
-$syncManager->run();
+// The chunk size and the query order are required
+$syncManager->setChunkSize(1000);
+$syncManager->setQueryOrder('DESC');
+
+// Records per table its optional
+$syncManager->setMaxRecordsPerTable(1000);
+
+// Run the synchronization from schemas
+$syncManager->run($sourceSchema, $targetSchema);
 ```
 
 ## Configuración avanzada
 
-### Personalización del logging
+### Custom logger
 
-Puedes implementar tu propio logger extendiendo la interfaz `LoggerInterface`:
+Se puede implementar un custom logger extendiendo la interfaz `Logger`:
 
 ```php
-use Dankkomcg\MySQL\Sync\Mappers\LoggerInterface;
+use Dankkomcg\MySQL\Sync\Loggers\Logger;
 
-class CustomLogger implements LoggerInterface
-{
+class CustomLogger implements Logger {
     // Implementa los métodos requeridos
 }
 
-SyncManager::setLogger(new CustomLogger());
+$syncManager->setLogger(new CustomLogger());
+```
+
+### Composite logger
+
+```php
+// Config the logger
+$compositeLogger = new CompositeLogger();
+$compositeLogger->addLogger(new ConsoleLogger);
+$compositeLogger->addLogger(
+    new FileLogger(
+        sprintf(
+            "synchronize_database_%s.log", date('Ymd_His')
+        )
+    )
+);
+
+$syncManager->setLogger($compositeLogger);
 ```
 
 ### Manejo de dependencias cíclicas
 
-La librería utiliza un `DependencyResolver` para manejar dependencias entre tablas. En caso de dependencias cíclicas, se emitirá una advertencia y se procederá con un orden best-effort.
+La librería utiliza un `DependencyResolver` para manejar dependencias entre tablas. 
+En caso de dependencias cíclicas, se emitirá una advertencia y se procederá con un orden `best-effort`.
 
 ## Consideraciones de rendimiento
 
@@ -89,8 +109,8 @@ La librería utiliza un `DependencyResolver` para manejar dependencias entre tab
 
 ## Contribuciones
 
-Las contribuciones son bienvenidas. Por favor, abre un issue para discutir cambios mayores antes de enviar un pull request.
+Las contribuciones son bienvenidas. Por favor, abre un issue para discutir cambios antes de enviar un pull request.
 
 ## Licencia
 
-Este proyecto está licenciado bajo la Licencia MIT.
+Este proyecto está licenciado bajo Licencia MIT.

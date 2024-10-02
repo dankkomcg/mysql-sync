@@ -30,9 +30,6 @@ Basado en la optimización para bases de datos de gran escala, se indican las fu
 8. Optimización de transacciones:
    - Implementar un sistema de transacciones más granular para reducir los bloqueos de tablas durante largos períodos.
 
-9. Caché inteligente:
-   - Desarrollar un sistema de caché que almacene temporalmente los datos más frecuentemente accedidos para reducir las consultas a la base de datos.
-
-10. Monitoreo y diagnóstico avanzados:
+9. Monitoreo y diagnóstico avanzados:
     - Implementar herramientas de monitoreo en tiempo real para identificar cuellos de botella durante la sincronización.
     - Desarrollar un sistema de logging más detallado para facilitar el diagnóstico de problemas de rendimiento.

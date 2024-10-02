@@ -2,22 +2,22 @@
 
 namespace Dankkomcg\MySQL\Sync;
 
-use Dankkomcg\MySQL\Sync\Mappers\LoggerInterface;
-use Dankkomcg\MySQL\Sync\Mappers\DisplayConsoleLog;
+use Dankkomcg\MySQL\Sync\Loggers\ConsoleLogger;
+use Dankkomcg\MySQL\Sync\Loggers\Logger;
 
-abstract class Loggable
-{
-    private static ?LoggerInterface $logger = null;
+trait Loggable {
+
+    private static ?Logger $logger = null;
     
-    protected function logger(): LoggerInterface
+    protected function logger(): Logger
     {
         if (self::$logger === null) {
-            self::$logger = new DisplayConsoleLog();
+            self::$logger = new ConsoleLogger();
         }
         return self::$logger;
     }
 
-    public static function setLogger(LoggerInterface $logger): void
+    public function setLogger(Logger $logger): void
     {
         self::$logger = $logger;
     }

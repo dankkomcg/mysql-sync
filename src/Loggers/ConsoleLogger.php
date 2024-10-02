@@ -1,8 +1,8 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync\Mappers;
+namespace Dankkomcg\MySQL\Sync\Loggers;
 
-class DisplayConsoleLog implements LoggerInterface {
+class ConsoleLogger implements Logger {
     private array $logLevels;
 
     public function __construct() {

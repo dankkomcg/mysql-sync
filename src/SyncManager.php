@@ -2,72 +2,41 @@
 
 namespace Dankkomcg\MySQL\Sync;
 
-use Dankkomcg\MySQL\Sync\Exceptions\OrderSyncException;
+use Dankkomcg\MySQL\Sync\Exceptions\ChunkSizeValueException;
+use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
 use Exception;
 
-// Clase que coordina la sincronización
-class SyncManager extends Loggable
-{
+class SyncManager {
+
+    use Loggable;
+
     private DatabaseConnection $sourceConnection;
     private DatabaseConnection $targetConnection;
     private int $chunkSize;
-    private int $maxRecordsPerTable;
-    private $syncDirection;
-    
-    private static SyncManager $_instance;
-
-    /**
-     * 
-     * Fake instance creator to prevent create a new version
-     * In next version, construct class must be changed by self construct methods
-     * 
-     * @throws \Exception
-     * @return \Dankkomcg\MySQL\Sync\SyncManager
-     */
-    public static function getInstance(): SyncManager {
-        if(!isset(self::$_instance)) {
-            throw new Exception("");
-        }
-        return self::$_instance;
-    }
+    private $maxRecordsPerTable;
+    private string $queryOrder;
+    private array $filteredTables = [];
 
     /**
      * Simple self construct class
      * 
-     * @param \Dankkomcg\MySQL\Sync\DatabaseConnection $sourceConnection
-     * @param \Dankkomcg\MySQL\Sync\DatabaseConnection $targetConnection
-     * @return \Dankkomcg\MySQL\Sync\SyncManager
+     * @param DatabaseConnection $sourceConnection
+     * @param DatabaseConnection $targetConnection
+     * @return SyncManager
      */
-    public static function create(
-        DatabaseConnection $sourceConnection, DatabaseConnection $targetConnection
-    ): SyncManager {
-        return new self(
-            $sourceConnection, $targetConnection
-        );
+    public static function create(DatabaseConnection $sourceConnection, DatabaseConnection $targetConnection): SyncManager {
+        return new self($sourceConnection, $targetConnection);
     }
 
     /**
-     * Create with chunkSize to delimite the data to extract and synchronize
-     * 
-     * @param \Dankkomcg\MySQL\Sync\Databaseconnection $sourceConnection
-     * @param \Dankkomcg\MySQL\Sync\DatabaseConnection $targetConnection
-     * @param int $chunkSize
-     * @return \Dankkomcg\MySQL\Sync\SyncManager
+     * @throws ChunkSizeValueException
      */
-    public static function createByChunkSize(
-        Databaseconnection $sourceConnection, DatabaseConnection $targetConnection, int $chunkSize
-    ): SyncManager {
-        return new self(
-            $sourceConnection, $targetConnection, $chunkSize
-        );
-    }
-    
     public function setChunkSize(int $chunkSize): void {
 
         if($chunkSize <= 0) {
-            throw new OrderSyncException(
+            throw new ChunkSizeValueException(
                 sprintf(
-                    "%s as chunk size can't be less or equal to zero"
+                    "%s as chunk size can't be less or equal to zero", $chunkSize
                 )
             );
         }
@@ -79,82 +48,155 @@ class SyncManager extends Loggable
         $this->maxRecordsPerTable = $maxRecordsPerTable;
     }
 
-    public function setSyncDirection(string $syncDirection): void {
+    /**
+     * @throws QueryOrderException
+     */
+    public function setQueryOrder(string $queryOrder): void {
         
-        if(!in_array($syncDirection, ['ASC', 'DESC'])) {
-            throw new OrderSyncException(
+        if(!in_array($queryOrder, ['ASC', 'DESC'])) {
+            throw new QueryOrderException(
                 sprintf(
-                    "%s is a not valid value to define the synchronization order."
+                    "%s is a not valid value to define the synchronization order.", $queryOrder
                 )
             );
         }
 
-        $this->syncDirection = $syncDirection;
+        $this->queryOrder = $queryOrder;
 
     }
 
     /**
-     * Classic construct of class will be modificated to use self construct methods in next version
-     * 
+     * Classic construct of class will be updated to use self construct methods in next version
+     *
      * @param DatabaseConnection $sourceConnection
      * @param DatabaseConnection $targetConnection
-     * @param mixed $chunkSize
+     * @param int $chunkSize
      * @param mixed $maxRecordsPerTable
-     * @param mixed $syncDirection
-     * 
+     * @param string $queryOrder
      */
     public function __construct(
-        DatabaseConnection $sourceConnection, DatabaseConnection $targetConnection, 
+        DatabaseConnection $sourceConnection, DatabaseConnection $targetConnection,
         // Will be removed in next version
-        $chunkSize = null, $maxRecordsPerTable = null, $syncDirection = 'DESC'
+        int $chunkSize = 1000, $maxRecordsPerTable = null, string $queryOrder = 'DESC'
     ) {
         $this->sourceConnection   = $sourceConnection;
         $this->targetConnection   = $targetConnection;
         $this->chunkSize          = $chunkSize;
         $this->maxRecordsPerTable = $maxRecordsPerTable;
-        $this->syncDirection      = $syncDirection;
-
-        // Marcar la instancia como creada
-        self::$_instance = $this;
-
+        $this->queryOrder         = $queryOrder;
     }
 
     /**
-     * Extrae la información desde el esquema de origen hasta el esquema de destino
-     * 
+     * Tables which is not synchronized between origin and destiny
+     *
+     * @param array $filteredTables
+     * @return void
+     */
+    public function setFilteredTables(array $filteredTables): void {
+        $this->filteredTables = $filteredTables;
+    }
+
+    /**
+     * Extract the data information from origin to import into destiny schema
+     *
      * @param string $sourceSchema
      * @param string $targetSchema
      * @return void
      */
-    public function run(string $sourceSchema, string $targetSchema)
-    {
+    public function run(string $sourceSchema, string $targetSchema) {
         
         try {
-            
-            $this->logger()->write("Iniciando proceso de sincronización...", 'info');
 
-            // Crea el orden de dependencias de las tablas para evitar insertar datos huérfanos
-            // De esta forma evita el tener que desactivar las claves foráneas en destino
-            $resolver = new DependencyResolver();
+            // Validate the configuration
+            $this->validate();
             
-            $tables = $resolver->getTablesInDependencyOrder(
-                $this->sourceConnection->getPdo(), $sourceSchema
+            $this->logger()->info(
+                sprintf(
+                    "Synchronization from %s origin schema to %s target schema",
+                    $sourceSchema, $targetSchema
+                )
             );
+
+            // Retrieve tables from source schema with foreign key dependency order resolved
+            $dependencyOrderedTables = $this->getSourceTablesWithDependencyOrder($sourceSchema);
 
             $tableSync = new TableSync(
-                $this->sourceConnection->getPdo(),
-                $this->targetConnection->getPdo(),
-                $this->chunkSize,
-                $this->maxRecordsPerTable,
-                $this->syncDirection
+                $this->sourceConnection->getPdo(), $this->targetConnection->getPdo()
             );
 
-            $tableSync->syncTables($tables, $sourceSchema, $targetSchema);
+            $tableSync->setChunkSize($this->chunkSize);
+            $tableSync->setQueryOrder($this->queryOrder);
+            $tableSync->setMaxRecordsPerTable($this->maxRecordsPerTable);
+
+            $tableSync->syncSchemaTables(
+                $dependencyOrderedTables, $sourceSchema, $targetSchema
+            );
             
-            $this->logger()->success("Sincronización completada exitosamente.");
+            $this->logger()->success(
+                "Synchronization is completed"
+            );
 
         } catch (Exception $e) {
-            $this->logger()->error("Error durante la sincronización: " . $e->getMessage());
+            $this->logger()->error(
+                sprintf(
+                    "Error while synchronization: %s", $e->getMessage()
+                )
+            );
         }
     }
+
+    /**
+     * @throws ChunkSizeValueException
+     * @throws QueryOrderException
+     */
+    private function validate() {
+
+        if (empty($this->chunkSize)) {
+            throw new ChunkSizeValueException(
+                "The chunk size must be greater than 0 or null"
+            );
+        }
+
+        if (empty($this->queryOrder)) {
+            throw new QueryOrderException(
+                "The synchronization order must be defined"
+            );
+        }
+
+    }
+
+    /**
+     * Crea el orden de dependencias de las tablas para evitar insertar datos huérfanos
+     * De esta forma evita el tener que desactivar las claves foráneas en destino
+     *
+     * @param string $sourceSchema
+     * @return array
+     */
+    private function getSourceTablesWithDependencyOrder(string $sourceSchema): array {
+
+        $resolver = new DependencyResolver();
+
+        $tablesOrderedByForeignKey = $resolver->getTablesInDependencyOrder(
+            $this->sourceConnection->getPdo(), $sourceSchema
+        );
+
+        // If isset filteredTables, only make the sync with this tables
+        if (!empty($this->filteredTables)) {
+
+            $this->logger()->warning(
+                sprintf(
+                    "You've add %s tables to the filter, be carefully with foreign keys dependency order", count($this->filteredTables)
+                )
+            );
+
+            // Exclude tables
+            $tablesOrderedByForeignKey = array_intersect(
+                $tablesOrderedByForeignKey, $this->filteredTables
+            );
+        }
+
+        return $tablesOrderedByForeignKey;
+
+    }
+
 }

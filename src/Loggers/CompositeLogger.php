@@ -1,21 +1,14 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync\Mappers;
+namespace Dankkomcg\MySQL\Sync\Loggers;
 
-class CompositeLogger implements LoggerInterface
+class CompositeLogger implements Logger
 {
     private array $loggers = [];
 
-    public function addLogger(LoggerInterface $logger): void
+    public function addLogger(Logger $logger): void
     {
         $this->loggers[] = $logger;
-    }
-
-    public function write(string $message, string $level = 'info'): void
-    {
-        foreach ($this->loggers as $logger) {
-            $logger->write($message, $level);
-        }
     }
 
     public function info(string $message): void
@@ -37,4 +30,12 @@ class CompositeLogger implements LoggerInterface
     {
         $this->write($message, 'success');
     }
+
+    public function write(string $message, string $level = 'info'): void
+    {
+        foreach ($this->loggers as $logger) {
+            $logger->write($message, $level);
+        }
+    }
+
 }

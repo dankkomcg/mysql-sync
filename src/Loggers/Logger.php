@@ -1,8 +1,8 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync\Mappers;
+namespace Dankkomcg\MySQL\Sync\Loggers;
 
-interface LoggerInterface
+interface Logger
 {
     public function write(string $message, string $level = 'info'): void;
     public function info(string $message): void;

@@ -1,2 +1,4 @@
+.idea
 vendor
 tests/Project
+.phpunit.result.cache
