@@ -4,18 +4,50 @@ namespace Dankkomcg\MySQL\Sync;
 
 use Dankkomcg\MySQL\Sync\Exceptions\ChunkSizeValueException;
 use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
+use Dankkomcg\MySQL\Sync\Loggers\Loggable;
+use Dankkomcg\MySQL\Sync\Order\DependencyResolver;
+use Dankkomcg\MySQL\Sync\Order\DynamicDependencyResolver;
+use Dankkomcg\MySQL\Sync\Order\TopologicalDependencyResolver;
 use Exception;
 
 class SyncManager {
 
     use Loggable;
 
+    /**
+     * @var DatabaseConnection
+     */
     private DatabaseConnection $sourceConnection;
+
+    /**
+     * @var DatabaseConnection
+     */
     private DatabaseConnection $targetConnection;
+
+    /**
+     * @var int
+     */
     private int $chunkSize;
+
+    /**
+     * @var mixed
+     */
     private $maxRecordsPerTable;
+
+    /**
+     * @var string
+     */
     private string $queryOrder;
+
+    /**
+     * @var array
+     */
     private array $filteredTables = [];
+
+    /**
+     * @var DependencyResolver
+     */
+    private DependencyResolver $dependencyResolver;
 
     /**
      * Simple self construct class
@@ -126,15 +158,14 @@ class SyncManager {
 
             $tableSync->setChunkSize($this->chunkSize);
             $tableSync->setQueryOrder($this->queryOrder);
-            $tableSync->setMaxRecordsPerTable($this->maxRecordsPerTable);
 
-            $tableSync->syncSchemaTables(
-                $dependencyOrderedTables, $sourceSchema, $targetSchema
-            );
+            if (isset($this->maxRecordsPerTable)) {
+                $tableSync->setMaxRecordsPerTable($this->maxRecordsPerTable);
+            }
+
+            $tableSync->syncSchemaTables($dependencyOrderedTables, $sourceSchema, $targetSchema);
             
-            $this->logger()->success(
-                "Synchronization is completed"
-            );
+            $this->logger()->success("Synchronization is completed");
 
         } catch (Exception $e) {
             $this->logger()->error(
@@ -171,14 +202,15 @@ class SyncManager {
      *
      * @param string $sourceSchema
      * @return array
+     * @throws QueryOrderException
      */
     private function getSourceTablesWithDependencyOrder(string $sourceSchema): array {
 
-        $resolver = new DependencyResolver();
+        // $dependencyOrderTableResolver = new TopologicalDependencyResolver($this->sourceConnection->getPdo(), $sourceSchema);
+        $dependencyOrderTableResolver = new DynamicDependencyResolver($this->sourceConnection->getPdo(), $sourceSchema);
+        $tablesOrderedByForeignKey    = $dependencyOrderTableResolver->getTablesInDependencyOrder();
 
-        $tablesOrderedByForeignKey = $resolver->getTablesInDependencyOrder(
-            $this->sourceConnection->getPdo(), $sourceSchema
-        );
+        print_r($tablesOrderedByForeignKey) && exit;
 
         // If isset filteredTables, only make the sync with this tables
         if (!empty($this->filteredTables)) {
