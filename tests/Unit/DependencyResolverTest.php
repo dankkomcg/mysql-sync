@@ -2,9 +2,9 @@
 
 namespace Dankkomcg\MySQL\Sync\Tests\Unit;
 
-use PHPUnit\Framework\TestCase;
-use Dankkomcg\MySQL\Sync\DependencyResolver;
+use Dankkomcg\MySQL\Sync\Order\DependencyResolver;
 use PDO;
+use PHPUnit\Framework\TestCase;
 
 class DependencyResolverTest extends TestCase
 {
@@ -34,7 +34,7 @@ class DependencyResolverTest extends TestCase
         $this->pdo->method('prepare')
             ->willReturnOnConsecutiveCalls($stmtForeignKeys, $stmtTables);
 
-        $result = $this->resolver->getTablesInDependencyOrder($this->pdo, $schema);
+        $result = $this->resolver->getTablesInDependencyOrder($this->pdo);
         $this->assertEquals(
             [
                 'table1', 'table2', 'table3'

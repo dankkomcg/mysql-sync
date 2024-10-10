@@ -1,9 +1,6 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync;
-
-use Dankkomcg\MySQL\Sync\Loggers\ConsoleLogger;
-use Dankkomcg\MySQL\Sync\Loggers\Logger;
+namespace Dankkomcg\MySQL\Sync\Loggers;
 
 trait Loggable {
 

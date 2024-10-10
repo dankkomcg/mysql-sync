@@ -3,6 +3,7 @@
 namespace Dankkomcg\MySQL\Sync;
 
 use Dankkomcg\MySQL\Sync\Exceptions\TableSyncException;
+use Dankkomcg\MySQL\Sync\Loggers\Loggable;
 use PDO;
 use PDOException;
 
@@ -74,9 +75,7 @@ class TableSync {
     /**
      * @throws TableSyncException
      */
-    private function createTransactionStatement(
-        array $tables, string $sourceSchema, string $targetSchema): void
-    {
+    private function createTransactionStatement(array $tables, string $sourceSchema, string $targetSchema): void {
 
         if (empty($tables)) {
             throw new TableSyncException("No tables to synchronize");
@@ -87,40 +86,54 @@ class TableSync {
             $this->targetPdo->beginTransaction();
 
             foreach ($tables as $table) {
-
-                $this->logger()->info(
-                    sprintf(
-                        "Copying data from table %s...", $table
-                    )
-                );
-
-                $columnsInfo = $this->getColumnsInfo($table, $sourceSchema);
-                $primaryKeys = $this->getPrimaryKeys($columnsInfo);
-                $foreignKeys = $this->getForeignKeys($table, $sourceSchema);
-
-                $orderColumn = $this->getOrderColumn($columnsInfo, $primaryKeys);
-
-                $totalRows = $this->getTotalRows($table, $sourceSchema);
-
-                if (isset($this->maxRecordsPerTable)) {
-                    $totalRows = min($totalRows, $this->maxRecordsPerTable);
-                }
-
-                $this->copyData(
-                    $table, $columnsInfo, $primaryKeys, $foreignKeys, $orderColumn, $sourceSchema, $targetSchema, $totalRows
-                );
-
-                $this->logger()->success("Datos copiados completamente para la tabla: $table.");
+                $this->prepareTableAndCopy($table, $sourceSchema, $targetSchema);
             }
 
+            // Commit when table is finished to prevent large commit
             $this->targetPdo->commit();
 
         } catch (\Exception $e) {
 
             $this->targetPdo->rollBack();
-            throw $e;
+
+            throw new TableSyncException(
+                sprintf(
+                    "Synchronization error, rollback: %s", $e->getMessage()
+                )
+            );
 
         }
+
+    }
+
+    private function prepareTableAndCopy(string $table, string $sourceSchema, string $targetSchema): void {
+
+        $this->logger()->info(
+            sprintf(
+                "Copying data from table %s...", $table
+            )
+        );
+
+        $columnsInfo = $this->getColumnsInfo($table, $sourceSchema);
+        $primaryKeys = $this->getPrimaryKeys($columnsInfo);
+        $foreignKeys = $this->getForeignKeys($table, $sourceSchema);
+        $orderColumn = $this->getOrderColumn($columnsInfo, $primaryKeys);
+        $totalRows = $this->getTotalRows($table, $sourceSchema);
+
+        if (isset($this->maxRecordsPerTable)) {
+            $totalRows = min($totalRows, $this->maxRecordsPerTable);
+        }
+
+        $this->copyData(
+            $table, $columnsInfo, $primaryKeys, $foreignKeys, $orderColumn, $sourceSchema, $targetSchema, $totalRows
+        );
+
+        $this->logger()->success(
+            sprintf(
+                "Data was successfully copied to table: %s.", $table
+            )
+        );
+
 
     }
 
@@ -188,8 +201,19 @@ class TableSync {
                 }
             }
 
-            foreach ($foreignKeys as $fk) {
-                $this->copyRelatedData($fk['REFERENCED_TABLE_NAME'], $fk['REFERENCED_COLUMN_NAME'], $rows, $fk['COLUMN_NAME'], $sourceSchema, $targetSchema);
+            // Si hay claves foráneas, extrae la tablas relacionadas con los IDs a exportar
+            if (!empty($foreignKeys)) {
+
+                print_r($foreignKeys) && exit;
+
+                foreach ($foreignKeys as $fk) {
+                    $this->copyRelatedData(
+                        $fk['REFERENCED_TABLE_NAME'],
+                        $fk['REFERENCED_COLUMN_NAME'],
+                        $rows, $fk['COLUMN_NAME'],
+                        $sourceSchema, $targetSchema
+                    );
+                }
             }
 
             // Comprueba el tipo de registro
