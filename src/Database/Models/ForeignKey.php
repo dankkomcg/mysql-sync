@@ -1,6 +1,6 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync\Models;
+namespace Dankkomcg\MySQL\Sync\Database\Models;
 
 class ForeignKey {
 
@@ -27,12 +27,12 @@ class ForeignKey {
     /**
      * Foreign key identifier
      *
-     * @var string
+     * @var ConstraintForeignKey
      */
-    private string $constraint;
+    private ConstraintForeignKey $constraint;
 
     public function __construct(
-        Table $table, Table $referencedTable, Column $originColumn, Column $referencedColumn, string $constraint
+        Table $table, Table $referencedTable, Column $originColumn, Column $referencedColumn, ConstraintForeignKey $constraint
     ) {
         $this->table            = $table;
         $this->referencedTable  = $referencedTable;
@@ -69,9 +69,9 @@ class ForeignKey {
     }
 
     /**
-     * @return string
+     * @return ConstraintForeignKey
      */
-    public function getConstraint(): string
+    public function getConstraint(): ConstraintForeignKey
     {
         return $this->constraint;
     }

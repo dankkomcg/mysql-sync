@@ -2,10 +2,10 @@
 
 namespace Dankkomcg\MySQL\Sync\Tests\Unit;
 
-use PHPUnit\Framework\TestCase;
-use Dankkomcg\MySQL\Sync\TableSync;
+use Dankkomcg\MySQL\Sync\Database\Services\TableSync;
 use PDO;
 use PDOStatement;
+use PHPUnit\Framework\TestCase;
 
 class TableSyncTest extends TestCase
 {

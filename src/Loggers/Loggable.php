@@ -14,8 +14,7 @@ trait Loggable {
         return self::$logger;
     }
 
-    public function setLogger(Logger $logger): void
-    {
+    public function setLogger(Logger $logger): void {
         self::$logger = $logger;
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Dankkomcg\MySQL\Sync\Tests\Unit;
 
-use Dankkomcg\MySQL\Sync\Order\DependencyResolver;
+use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DependencyResolver;
 use PDO;
 use PHPUnit\Framework\TestCase;
 

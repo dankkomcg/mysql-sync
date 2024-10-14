@@ -1,7 +1,8 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync;
+namespace Dankkomcg\MySQL\Sync\Database\Services;
 
+use Dankkomcg\MySQL\Sync\Database\Models\Table;
 use Dankkomcg\MySQL\Sync\Exceptions\TableSyncException;
 use Dankkomcg\MySQL\Sync\Loggers\Loggable;
 use PDO;
@@ -21,15 +22,17 @@ class TableSync {
     private array $extractedIds;
     private string $syncDirection;
 
-    private const QUERY_TABLE_COLUMNS_INFORMATION_SCHEMA = "
-        SELECT COLUMN_NAME 
+    private const QUERY_TABLE_COLUMNS_INFORMATION_SCHEMA =
+        "SELECT COLUMN_NAME 
         FROM 
             INFORMATION_SCHEMA.COLUMNS 
         WHERE 
             TABLE_SCHEMA = :schema AND TABLE_NAME = :table
-            ";
+        "
+    ;
 
-    private const QUERY_FOREIGN_KEYS_INFORMATION_SCHEMA = "
+    private const QUERY_FOREIGN_KEYS_INFORMATION_SCHEMA =
+        "
         SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME 
         FROM
             INFORMATION_SCHEMA.KEY_COLUMN_USAGE
@@ -37,7 +40,8 @@ class TableSync {
             TABLE_SCHEMA = :schema
             AND TABLE_NAME = :table
             AND REFERENCED_TABLE_NAME IS NOT NULL
-            ";
+            "
+    ;
 
     public function __construct(PDO $sourcePdo, PDO $targetPdo) {
         $this->sourcePdo          = $sourcePdo;
@@ -45,18 +49,12 @@ class TableSync {
         $this->extractedIds       = [];
     }
 
-    public function setChunkSize(int $chunkSize): void {
-        $this->chunkSize = $chunkSize;
-    }
-
-    public function setMaxRecordsPerTable(int $maxRecordsPerTable): void {
-        $this->maxRecordsPerTable = $maxRecordsPerTable;
-    }
-
-    public function setQueryOrder(string $syncDirection): void {
-        $this->syncDirection = $syncDirection;
-    }
-
+    /**
+     * @param array $tables <Table> $tables
+     * @param string $sourceSchema
+     * @param string $targetSchema
+     * @return void
+     */
     public function syncSchemaTables(array $tables, string $sourceSchema, string $targetSchema) {
 
         try {
@@ -73,6 +71,10 @@ class TableSync {
     }
 
     /**
+     * @param array $tables <Table> $tables
+     * @param string $sourceSchema
+     * @param string $targetSchema
+     * @return void
      * @throws TableSyncException
      */
     private function createTransactionStatement(array $tables, string $sourceSchema, string $targetSchema): void {
@@ -85,8 +87,9 @@ class TableSync {
 
             $this->targetPdo->beginTransaction();
 
+            /** @var Table $table */
             foreach ($tables as $table) {
-                $this->prepareTableAndCopy($table, $sourceSchema, $targetSchema);
+                $this->prepareTableAndCopy($table->getName(), $sourceSchema, $targetSchema);
             }
 
             // Commit when table is finished to prevent large commit
@@ -203,9 +206,6 @@ class TableSync {
 
             // Si hay claves foráneas, extrae la tablas relacionadas con los IDs a exportar
             if (!empty($foreignKeys)) {
-
-                print_r($foreignKeys) && exit;
-
                 foreach ($foreignKeys as $fk) {
                     $this->copyRelatedData(
                         $fk['REFERENCED_TABLE_NAME'],
@@ -244,7 +244,7 @@ class TableSync {
     }
 
     private function fetchRows($table, $orderColumn, $schema, $lastValue)
-    {   
+    {
         $direction = $this->syncDirection;
         $operator = $direction === 'DESC' ? '<' : '>';
 
@@ -259,7 +259,7 @@ class TableSync {
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+
     private function getTableColumns($schema, $table) {
 
         $stmt = $this->targetPdo->prepare(
@@ -286,7 +286,7 @@ class TableSync {
 
         $placeholders = implode(',', array_fill(0, count($values), '?'));
         $query = "SELECT * FROM `$sourceSchema`.`$referencedTable` WHERE `$referencedColumn` IN ($placeholders)";
-        
+
         $stmt = $this->sourcePdo->prepare($query);
         $stmt->execute(array_values($values));
         $relatedRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -311,7 +311,7 @@ class TableSync {
         if (empty($rows)) {
             return;
         }
-    
+
         $realColumns = $this->getTableColumns($schema, $table);
 
         $this->logger()
@@ -321,11 +321,11 @@ class TableSync {
                 )
             )
         ;
-    
+
         $columnsList = implode(", ", array_map(function($col) {
             return "`$col`";
         }, $realColumns));
-    
+
         $placeholders = [];
         $insertData = [];
         foreach ($rows as $row) {
@@ -349,23 +349,23 @@ class TableSync {
             $placeholders[] = '(' . implode(', ', $rowPlaceholders) . ')';
             $insertData = array_merge($insertData, $rowData);
         }
-    
+
         $placeholdersString = implode(', ', $placeholders);
-    
+
         $updateList = [];
         foreach ($realColumns as $column) {
             if (!in_array($column, $primaryKeys)) {
                 $updateList[] = "`$column` = VALUES(`$column`)";
             }
         }
-    
+
         $updateClause = implode(", ", $updateList);
-    
+
         $insertQuery = "INSERT INTO `$schema`.`$table` ($columnsList) VALUES $placeholdersString 
             ON DUPLICATE KEY UPDATE $updateClause";
-    
+
         try {
-            
+
             $stmtInsert = $this->targetPdo->prepare($insertQuery);
             $stmtInsert->execute($insertData);
 
@@ -413,7 +413,7 @@ class TableSync {
 
         }
     }
-    
+
     private function handleForeignKeyError($table, $schema, $columnsList, $rows, $realColumns)
     {
         $this->logger()
@@ -422,23 +422,23 @@ class TableSync {
                     "Reviewing the foreign key error from table %s", $table
                 )
             );
-        
+
         // Insertar registros uno por uno
         $insertQuery = "INSERT INTO `$schema`.`$table` ($columnsList) VALUES (" . implode(',', array_fill(0, count($realColumns), '?')) . ")
             ON DUPLICATE KEY UPDATE " . implode(', ', array_map(function($col) { return "`$col` = VALUES(`$col`)"; }, $realColumns)
-        );
-        
+            );
+
         $stmtInsert = $this->targetPdo->prepare($insertQuery);
-        
+
         $successCount = 0;
         $errorCount = 0;
-        
+
         foreach ($rows as $row) {
             $rowData = [];
             foreach ($realColumns as $column) {
                 $rowData[] = array_key_exists($column, $row) ? $row[$column] : null;
             }
-            
+
             try {
                 $stmtInsert->execute($rowData);
                 $successCount++;
@@ -447,7 +447,7 @@ class TableSync {
                 // Opcionalmente, puedes logear los errores específicos aquí
             }
         }
-        
+
         $this->logger()
             ->success(
                 sprintf("%s rows created successfully, %s rows fail from table %s", $successCount, $errorCount, $table)

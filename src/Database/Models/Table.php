@@ -1,6 +1,7 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync\Models;
+namespace Dankkomcg\MySQL\Sync\Database\Models;
+
 class Table {
 
     private string $name;

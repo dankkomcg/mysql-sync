@@ -1,11 +1,11 @@
 <?php
 
-namespace Dankkomcg\MySQL\Sync;
+namespace Dankkomcg\MySQL\Sync\Database;
 
 use Dankkomcg\MySQL\Sync\Exceptions\DatabaseConnectionException;
+use Exception;
 use PDO;
 use PDOException;
-use Exception;
 
 class DatabaseConnection
 {
@@ -14,8 +14,7 @@ class DatabaseConnection
     /**
      * @throws Exception
      */
-    public function __construct(string $host, string $username, string $password, string $schema)
-    {
+    public function __construct(string $host, string $username, string $password, string $schema) {
         try {
 
             $dsn = "mysql:host=$host;dbname=$schema;charset=utf8mb4";
@@ -27,7 +26,7 @@ class DatabaseConnection
         }
     }
 
-    public function getPdo(): PDO
+    public function getConnection(): PDO
     {
         return $this->pdo;
     }

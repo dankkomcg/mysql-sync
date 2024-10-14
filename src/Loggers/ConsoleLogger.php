@@ -3,13 +3,17 @@
 namespace Dankkomcg\MySQL\Sync\Loggers;
 
 class ConsoleLogger implements Logger {
-    private array $logLevels;
+
+    /**
+     * @var array
+     */
+    protected array $logLevels;
 
     public function __construct() {
         $this->initializeDefaultConfig();
     }
 
-    private function initializeDefaultConfig(): void {
+    protected function initializeDefaultConfig(): void {
         $this->logLevels = [
             'info' => 'blue',
             'success' => 'green',
@@ -44,7 +48,16 @@ class ConsoleLogger implements Logger {
         $this->write($message, 'success');
     }
 
-    private function getColorCode(string $color): string {
+    public function debug(string $message): void
+    {
+        $this->write($message);
+    }
+
+    /**
+     * @param string $color
+     * @return string
+     */
+    protected function getColorCode(string $color): string {
         $colors = [
             'black' => "\033[30m",
             'red' => "\033[31m",

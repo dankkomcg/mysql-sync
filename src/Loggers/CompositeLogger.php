@@ -31,6 +31,11 @@ class CompositeLogger implements Logger
         $this->write($message, 'success');
     }
 
+    public function debug(string $message): void
+    {
+        $this->write($message);
+    }
+
     public function write(string $message, string $level = 'info'): void
     {
         foreach ($this->loggers as $logger) {
