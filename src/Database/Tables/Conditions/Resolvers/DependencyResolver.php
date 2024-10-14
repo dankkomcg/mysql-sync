@@ -5,6 +5,7 @@ namespace Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers;
 use Dankkomcg\MySQL\Sync\Database\Models\Column;
 use Dankkomcg\MySQL\Sync\Database\Models\ConstraintForeignKey;
 use Dankkomcg\MySQL\Sync\Database\Models\ForeignKey;
+use Dankkomcg\MySQL\Sync\Database\Models\TargetSchema;
 use Dankkomcg\MySQL\Sync\Database\Models\TemplateSchema;
 use Dankkomcg\MySQL\Sync\Database\Models\Table;
 use Dankkomcg\MySQL\Sync\Database\Tables\QueryHelper;
@@ -16,10 +17,13 @@ abstract class DependencyResolver {
 
     use Loggable;
 
-    protected TemplateSchema $sourceSchema;
+    protected TemplateSchema $templateSchema;
 
-    public function __construct(TemplateSchema $schema) {
-        $this->sourceSchema = $schema;
+    protected TargetSchema $targetSchema;
+
+    public function __construct(TemplateSchema $schema, TargetSchema $targetSchema) {
+        $this->templateSchema = $schema;
+        $this->targetSchema = $targetSchema;
     }
 
     abstract function getFilteredTablesInDependencyOrder(array $filteredTables): array;
@@ -36,13 +40,13 @@ abstract class DependencyResolver {
      */
     protected function getSourceSchemaTables(): array {
         // Retrieve all tables on the information schema definition
-        $stmt = $this->sourceSchema->getDatabaseConnection()->prepare(QueryHelper::INFORMATION_SCHEMA_TABLES_QUERY);
-        $stmt->execute(['schema' => $this->sourceSchema->getSchemaName()]);
+        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(QueryHelper::INFORMATION_SCHEMA_TABLES_QUERY);
+        $stmt->execute(['schema' => $this->templateSchema->getSchemaName()]);
 
         if(!$tables = $stmt->fetchAll(PDO::FETCH_COLUMN)) {
             throw new QueryOrderException(
                 sprintf(
-                    "Can't find any tables on %s schema", $this->sourceSchema->getSchemaName()
+                    "Can't find any tables on %s schema", $this->templateSchema->getSchemaName()
                 )
             );
         }
@@ -59,18 +63,18 @@ abstract class DependencyResolver {
         $filteredTablesToQuery = $this->getTablesToWhereIn($filteredTables);
 
         // Retrieve all tables on the information schema definition
-        $stmt = $this->sourceSchema->getDatabaseConnection()->prepare(
+        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(
             sprintf(
                 QueryHelper::INFORMATION_SCHEMA_TABLES_QUERY_FILTERED, $filteredTablesToQuery
             )
         );
 
-        $stmt->execute(['schema' => $this->sourceSchema->getSchemaName()]);
+        $stmt->execute(['schema' => $this->templateSchema->getSchemaName()]);
 
         if(!$tables = $stmt->fetchAll(PDO::FETCH_COLUMN)) {
             throw new QueryOrderException(
                 sprintf(
-                    "Can't find any tables on %s schema", $this->sourceSchema->getSchemaName()
+                    "Can't find any tables on %s schema", $this->templateSchema->getSchemaName()
                 )
             );
         }
@@ -111,10 +115,10 @@ abstract class DependencyResolver {
      */
     protected function getForeignKeyReferencedTables(Table $queryTable): array {
 
-        $stmt = $this->sourceSchema->getDatabaseConnection()->prepare(QueryHelper::FOREIGN_KEY_PATTERN_TABLE);
+        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(QueryHelper::FOREIGN_KEY_PATTERN_TABLE);
 
         $stmt->execute([
-            'schema'     => $this->sourceSchema->getSchemaName(),
+            'schema'     => $this->templateSchema->getSchemaName(),
             'table_name' => $queryTable->getName()
         ]);
 
@@ -179,10 +183,10 @@ abstract class DependencyResolver {
     protected function getParentTables(Table $table): array {
 
         $parentTables = [];
-        $stmt = $this->sourceSchema->getDatabaseConnection()->prepare(QueryHelper::QUERY_PARENT_TABLES_FOREIGN_KEY);
+        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(QueryHelper::QUERY_PARENT_TABLES_FOREIGN_KEY);
 
         $stmt->execute([
-            'schema' => $this->sourceSchema->getSchemaName(),
+            'schema' => $this->templateSchema->getSchemaName(),
             'table_name' => $table->getName()
         ]);
 

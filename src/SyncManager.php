@@ -6,6 +6,7 @@ use Dankkomcg\MySQL\Sync\Database\DatabaseConnection;
 use Dankkomcg\MySQL\Sync\Database\Models\TargetSchema;
 use Dankkomcg\MySQL\Sync\Database\Models\TemplateSchema;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DependencyResolver;
+use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DynamicDependencyResolver;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\TableCondition;
 use Dankkomcg\MySQL\Sync\Exceptions\ChunkSizeValueException;
 use Dankkomcg\MySQL\Sync\Exceptions\EmptyTablesFilteredSchemaException;
@@ -83,18 +84,21 @@ class SyncManager {
     public function run(string $sourceSchemaString, string $targetSchemaString, array $tables = []) {
 
         $copyParameters = new SyncParameters(
-            $this->chunkSize, $this->queryOrder, $this->filteredTables, $this->maxRecordsPerTable
+            $this->chunkSize, $this->queryOrder,
+            // todo Realmente filtered tables es necesario como parámetro y no en ejecución?
+            $this->filteredTables, $this->maxRecordsPerTable
         );
 
-        $this->copy(
-            new TemplateSchema(
-                $sourceSchemaString, $this->sourceConnection, $copyParameters->getFilteredTables()
-            ),
-            new TargetSchema(
-                $targetSchemaString, $this->targetConnection
-            ),
-            $copyParameters
+        $templateSchema = new TemplateSchema($sourceSchemaString, $this->sourceConnection,
+            // todo configurar
+            $copyParameters->getFilteredTables()
         );
+
+        $targetSchema = new TargetSchema($targetSchemaString, $this->targetConnection);
+        $dependencyResolver = new DynamicDependencyResolver($templateSchema, $targetSchema);
+
+        // todo Realmente necesitamos los parámetros? el table condition como parámetro?
+        $this->copy($dependencyResolver, $copyParameters);
 
         /*
         try {
@@ -143,9 +147,7 @@ class SyncManager {
         */
     }
 
-    private function copy(TemplateSchema $templateSchema, TargetSchema $targetSchema, SyncParameters $parameters) {
-
-        print_r($parameters) && exit;
+    private function copy(DependencyResolver $dependencyResolver, SyncParameters $parameters) {
 
         // todo Decidir el table condition
         $tableCondition = new TableCondition();

@@ -41,12 +41,11 @@ class SyncParameters {
      * @param array $filteredTables
      * @param ?int $maxRecordsPerTable
      * @throws ChunkSizeValueException
-     * @throws EmptyTablesFilteredSchemaException
      * @throws MaxRecordsValueException
      * @throws QueryOrderException
      */
     public function __construct(int $chunkSize, string $queryOrder,
-                                array $filteredTables = null,
+                                array $filteredTables = [],
                                 int $maxRecordsPerTable = null) {
 
         $this->chunkSize          = new QueryChunkSize($chunkSize);

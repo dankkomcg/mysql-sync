@@ -74,13 +74,13 @@ class TopologicalDependencyResolver extends DependencyResolver {
         );
 
         // Obtener las claves foráneas de las tablas filtradas
-        $stmt = $this->sourceSchema->getDatabaseConnection()->prepare(
+        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(
             sprintf(
                 QueryHelper::REFERENCED_PARENT_TABLE_NAME_QUERY, $this->getTablesToWhereIn($preparedFillTables)
             )
         );
 
-        $stmt->execute(['schema' => $this->sourceSchema]);
+        $stmt->execute(['schema' => $this->templateSchema]);
         if ($foreignKeys = $stmt->fetchAll(PDO::FETCH_ASSOC)) {
 
             // Además de las tablas padre, también debemos obtener las tablas padre de las padre (REFERENCED_TABLE_NAME)
