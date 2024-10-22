@@ -21,10 +21,17 @@ class Table {
         return $this->name;
     }
 
+    /**
+     * @param ForeignKey $foreignKey
+     * @return void
+     */
     public function addForeignKey(ForeignKey $foreignKey): void {
         $this->foreignKeys[] = $foreignKey;
     }
 
+    /**
+     * @return array
+     */
     public function getForeignKeys(): array {
         return $this->foreignKeys;
     }

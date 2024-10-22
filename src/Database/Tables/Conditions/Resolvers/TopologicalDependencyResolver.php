@@ -74,7 +74,7 @@ class TopologicalDependencyResolver extends DependencyResolver {
         );
 
         // Obtener las claves foráneas de las tablas filtradas
-        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(
+        $stmt = $this->templateSchema->prepare(
             sprintf(
                 QueryHelper::REFERENCED_PARENT_TABLE_NAME_QUERY, $this->getTablesToWhereIn($preparedFillTables)
             )

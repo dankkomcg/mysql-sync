@@ -31,6 +31,13 @@ class ForeignKey {
      */
     private ConstraintForeignKey $constraint;
 
+    /**
+     * @param Table $table
+     * @param Table $referencedTable
+     * @param Column $originColumn
+     * @param Column $referencedColumn
+     * @param ConstraintForeignKey $constraint
+     */
     public function __construct(
         Table $table, Table $referencedTable, Column $originColumn, Column $referencedColumn, ConstraintForeignKey $constraint
     ) {

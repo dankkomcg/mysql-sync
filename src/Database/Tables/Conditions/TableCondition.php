@@ -4,9 +4,7 @@ namespace Dankkomcg\MySQL\Sync\Database\Tables\Conditions;
 
 use Dankkomcg\MySQL\Sync\Database\Models\TemplateSchema;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\DTOs\QueryChunkSize;
-use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\DTOs\QueryMaxRecordsPerTable;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\DTOs\QueryOrder;
-use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DependencyResolver;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DynamicDependencyResolver;
 use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
 

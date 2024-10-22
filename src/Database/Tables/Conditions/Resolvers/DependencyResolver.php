@@ -2,6 +2,7 @@
 
 namespace Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers;
 
+use Dankkomcg\Logger\Traits\Loggable;
 use Dankkomcg\MySQL\Sync\Database\Models\Column;
 use Dankkomcg\MySQL\Sync\Database\Models\ConstraintForeignKey;
 use Dankkomcg\MySQL\Sync\Database\Models\ForeignKey;
@@ -10,15 +11,20 @@ use Dankkomcg\MySQL\Sync\Database\Models\TemplateSchema;
 use Dankkomcg\MySQL\Sync\Database\Models\Table;
 use Dankkomcg\MySQL\Sync\Database\Tables\QueryHelper;
 use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
-use Dankkomcg\MySQL\Sync\Loggers\Loggable;
 use PDO;
 
 abstract class DependencyResolver {
 
     use Loggable;
 
+    /**
+     * @var TemplateSchema
+     */
     protected TemplateSchema $templateSchema;
 
+    /**
+     * @var TargetSchema
+     */
     protected TargetSchema $targetSchema;
 
     public function __construct(TemplateSchema $schema, TargetSchema $targetSchema) {
@@ -40,7 +46,7 @@ abstract class DependencyResolver {
      */
     protected function getSourceSchemaTables(): array {
         // Retrieve all tables on the information schema definition
-        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(QueryHelper::INFORMATION_SCHEMA_TABLES_QUERY);
+        $stmt = $this->templateSchema->prepare(QueryHelper::INFORMATION_SCHEMA_TABLES_QUERY);
         $stmt->execute(['schema' => $this->templateSchema->getSchemaName()]);
 
         if(!$tables = $stmt->fetchAll(PDO::FETCH_COLUMN)) {
@@ -63,7 +69,7 @@ abstract class DependencyResolver {
         $filteredTablesToQuery = $this->getTablesToWhereIn($filteredTables);
 
         // Retrieve all tables on the information schema definition
-        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(
+        $stmt = $this->templateSchema->prepare(
             sprintf(
                 QueryHelper::INFORMATION_SCHEMA_TABLES_QUERY_FILTERED, $filteredTablesToQuery
             )
@@ -115,7 +121,7 @@ abstract class DependencyResolver {
      */
     protected function getForeignKeyReferencedTables(Table $queryTable): array {
 
-        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(QueryHelper::FOREIGN_KEY_PATTERN_TABLE);
+        $stmt = $this->templateSchema->prepare(QueryHelper::FOREIGN_KEY_PATTERN_TABLE);
 
         $stmt->execute([
             'schema'     => $this->templateSchema->getSchemaName(),
@@ -183,7 +189,7 @@ abstract class DependencyResolver {
     protected function getParentTables(Table $table): array {
 
         $parentTables = [];
-        $stmt = $this->templateSchema->getDatabaseConnection()->prepare(QueryHelper::QUERY_PARENT_TABLES_FOREIGN_KEY);
+        $stmt = $this->templateSchema->prepare(QueryHelper::QUERY_PARENT_TABLES_FOREIGN_KEY);
 
         $stmt->execute([
             'schema' => $this->templateSchema->getSchemaName(),

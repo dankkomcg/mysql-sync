@@ -9,10 +9,9 @@ use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DependencyResolver
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers\DynamicDependencyResolver;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\TableCondition;
 use Dankkomcg\MySQL\Sync\Exceptions\ChunkSizeValueException;
-use Dankkomcg\MySQL\Sync\Exceptions\EmptyTablesFilteredSchemaException;
 use Dankkomcg\MySQL\Sync\Exceptions\MaxRecordsValueException;
 use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
-use Dankkomcg\MySQL\Sync\Loggers\Loggable;
+use Dankkomcg\Logger\Traits\Loggable;
 
 class SyncManager {
 
@@ -86,7 +85,8 @@ class SyncManager {
         $copyParameters = new SyncParameters(
             $this->chunkSize, $this->queryOrder,
             // todo Realmente filtered tables es necesario como parámetro y no en ejecución?
-            $this->filteredTables, $this->maxRecordsPerTable
+            $this->filteredTables,
+            $this->maxRecordsPerTable
         );
 
         $templateSchema = new TemplateSchema($sourceSchemaString, $this->sourceConnection,
@@ -96,6 +96,9 @@ class SyncManager {
 
         $targetSchema = new TargetSchema($targetSchemaString, $this->targetConnection);
         $dependencyResolver = new DynamicDependencyResolver($templateSchema, $targetSchema);
+        $dependencyResolver->setLogger($this->logger());
+
+        print_r($dependencyResolver->getFilteredTablesInDependencyOrder($tables)) && exit;
 
         // todo Realmente necesitamos los parámetros? el table condition como parámetro?
         $this->copy($dependencyResolver, $copyParameters);
@@ -152,6 +155,7 @@ class SyncManager {
         // todo Decidir el table condition
         $tableCondition = new TableCondition();
 
+        /*
         $this->dependencyResolver->whereTableCondition($tableCondition)->getTablesBasedOnCriteria();
 
         if (isset($this->filteredTables)) {
@@ -161,6 +165,7 @@ class SyncManager {
         }
 
         print_r($tables) && exit;
+        */
 
     }
 

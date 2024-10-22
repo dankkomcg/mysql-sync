@@ -2,9 +2,9 @@
 
 namespace Dankkomcg\MySQL\Sync\Database\Services;
 
+use Dankkomcg\Logger\Traits\Loggable;
 use Dankkomcg\MySQL\Sync\Database\Models\Table;
 use Dankkomcg\MySQL\Sync\Exceptions\TableSyncException;
-use Dankkomcg\MySQL\Sync\Loggers\Loggable;
 use PDO;
 use PDOException;
 

@@ -9,7 +9,6 @@ use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\DTOs\QueryMaxRecordsPerTable
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\DTOs\QueryFilteredTables;
 use Dankkomcg\MySQL\Sync\Database\Tables\Conditions\DTOs\QueryOrder;
 use Dankkomcg\MySQL\Sync\Exceptions\ChunkSizeValueException;
-use Dankkomcg\MySQL\Sync\Exceptions\EmptyTablesFilteredSchemaException;
 use Dankkomcg\MySQL\Sync\Exceptions\MaxRecordsValueException;
 use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
 

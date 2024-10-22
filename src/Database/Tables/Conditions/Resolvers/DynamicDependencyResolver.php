@@ -2,6 +2,7 @@
 
 namespace Dankkomcg\MySQL\Sync\Database\Tables\Conditions\Resolvers;
 
+use Dankkomcg\Logger\Exceptions\NoLogFoundException;
 use Dankkomcg\MySQL\Sync\Database\Models\ForeignKey;
 use Dankkomcg\MySQL\Sync\Database\Models\Table;
 use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
@@ -9,6 +10,7 @@ use Dankkomcg\MySQL\Sync\Exceptions\QueryOrderException;
 class DynamicDependencyResolver extends DependencyResolver {
 
     /**
+     * @throws NoLogFoundException
      * @throws QueryOrderException
      */
     public function getFilteredTablesInDependencyOrder(array $filteredTables): array {

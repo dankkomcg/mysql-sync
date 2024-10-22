@@ -11,6 +11,9 @@ class ConstraintForeignKey {
      */
     private string $constraintIdentifier;
 
+    /**
+     * @param string $constraintIdentifier
+     */
     public function __construct(string $constraintIdentifier) {
         $this->constraintIdentifier = $constraintIdentifier;
     }
